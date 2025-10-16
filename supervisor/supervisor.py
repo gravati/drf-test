@@ -47,4 +47,4 @@ class Scorer:
         s_cos = 1.0 - np.exp(-3.0 * cos)
         s_z = 1.0 - np.exp(-0.5 * z_agg)
         s = self.w_cos * s_cos + self.w_z * s_z
-        return{"cos": float(s_cos), "z": float(s_z), "score": float(s)}
+        return{"cos": float(s_cos), "z": float(s_z), "score": float(s), "z_full": z}

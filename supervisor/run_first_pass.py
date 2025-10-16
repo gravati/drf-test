@@ -5,8 +5,14 @@ import numpy as np
 
 from config import DRFConfig, Context
 from io_digitalrf import DigitalRFLoader
-from features import feature_vector
+from features import extract_features, stack_for_model
 from supervisor import Baseline, Scorer
+
+FEATURE_NAMES = (
+    [f"psd_comp_{i}" for i in range(64)] +
+    [f"band_{i}" for i in range(6)] +
+    ["entropy", "kurtosis", "peak_snr"]
+)
 
 ROOT = r"C:\Users\hatti\Downloads\netbeans-26-bin\sds-code\sdk\tests\integration\data\captures\drf\westford-vpol"
 
@@ -21,22 +27,39 @@ WARMUP = 200
 baseline = None
 scorer = Scorer(w_cos=0.6, w_z=0.4, agg="max")
 
-rows = []
+# MAIN LOOP ---
 i = 0
 for w, ks, ke in ldr.stream_windows(cfg.win, cfg.hop, normalize_power=True):
-    fv = feature_vector(w)  # shape (64 + 6 + 3,) = 73 dims
+    feat = extract_features(w)
+    fv = stack_for_model(feat)
+
     if baseline is None:
         baseline = Baseline(dim=fv.shape[0])
 
     if i < WARMUP:
         baseline.partial_fit(fv)
         state = "WARMUP"
-        s = {"cos": None, "z": None, "score": None}
+        score = None
+        cos = None
+        z = None
+        z_full = None
     else:
         s = scorer.score(fv, baseline.mean, baseline.std)
-        # optional slow update to track normal drift (comment out to freeze)
+        score = s["score"]
+        cos = s["cos"]
+        z = s["z"]
+        z_full = s["z_full"]
+
+        # opt. slow bl update
         baseline.partial_fit(fv)
-        state = "OK" if s["score"] < 0.35 else ("WARN" if s["score"] < 0.65 else "ALERT")
+
+        # determine state
+        if score < 0.35:
+            state = "OK"
+        elif score < 0.65:
+            state = "WARN"
+        else:
+            state = "ALERT"
 
     t0 = float(ldr.k_to_unix(ks))
     t1 = float(ldr.k_to_unix(ke))
@@ -48,13 +71,45 @@ for w, ks, ke in ldr.stream_windows(cfg.win, cfg.hop, normalize_power=True):
         "t_start": t0,
         "t_end": t1,
         "state": state,
-        "score": s["score"],
-        "cos": s["cos"],
-        "z": s["z"],
+        "score": score,
+        "cos": cos,
+        "z": z,
     }
-    print(json.dumps(row))
-    rows.append(row)
+    
+    # Attribution if WARN or ALERT
+if state in ("WARN", "ALERT") and z_full is not None:
+    # Top-k features
+    top_k = []
+    idxs = np.argsort(z_full)[::-1]
+    for j in idxs[:3]:
+        top_k.append({
+            "feature": FEATURE_NAMES[j],
+            "z": float(z_full[j]),
+            "value": float(fv[j]),
+        })
 
+    # Peak frequency using exactly the same nfft & shift as features
+    peak_bin = int(feat["peak_bin"])
+    N = int(feat.get("nfft", feat.get("psd_len", cfg.win)))
+    fs = ctx.sample_rate
+
+    if bool(feat.get("fftshifted", True)):
+        freqs = np.fft.fftshift(np.fft.fftfreq(N, d=1.0 / fs))
+    else:
+        freqs = np.fft.fftfreq(N, d=1.0 / fs)
+
+    # Tiny guard in case an old module version was cached
+    if peak_bin >= len(freqs):
+        peak_bin = len(freqs) - 1
+    elif peak_bin < 0:
+        peak_bin = 0
+
+    peak_freq_hz = float(freqs[peak_bin])
+
+    row["attribution"] = {
+        "top_features": top_k,
+        "peak_freq_hz": peak_freq_hz,
+    }
+
+    print(json.dumps(row))
     i += 1
-    # (optional) break early for smoke runs
-    # if i > 600: break
