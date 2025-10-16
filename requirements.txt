@@ -3,3 +3,4 @@ streamlit
 pillow
 scikit-learn
 pandas
+digital_rf
