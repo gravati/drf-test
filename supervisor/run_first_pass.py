@@ -77,39 +77,47 @@ for w, ks, ke in ldr.stream_windows(cfg.win, cfg.hop, normalize_power=True):
     }
     
     # Attribution if WARN or ALERT
-if state in ("WARN", "ALERT") and z_full is not None:
-    # Top-k features
-    top_k = []
-    idxs = np.argsort(z_full)[::-1]
-    for j in idxs[:3]:
-        top_k.append({
-            "feature": FEATURE_NAMES[j],
-            "z": float(z_full[j]),
-            "value": float(fv[j]),
-        })
+    if state in ("WARN", "ALERT") and z_full is not None:
+        # Top-k contributing features by z
+        top_k = []
+        idxs = np.argsort(z_full)[::-1]
+        for j in idxs[:3]:
+            top_k.append({
+                "feature": FEATURE_NAMES[j],
+                "z": float(z_full[j]),
+                "value": float(fv[j]),
+            })
 
-    # Peak frequency using exactly the same nfft & shift as features
-    peak_bin = int(feat["peak_bin"])
-    N = int(feat.get("nfft", feat.get("psd_len", cfg.win)))
-    fs = ctx.sample_rate
+        peak_bin = int(feat["peak_bin"])
+        N = int(feat.get("nfft", feat.get("psd_len", cfg.win)))
+        fs = ctx.sample_rate
 
-    if bool(feat.get("fftshifted", True)):
-        freqs = np.fft.fftshift(np.fft.fftfreq(N, d=1.0 / fs))
-    else:
-        freqs = np.fft.fftfreq(N, d=1.0 / fs)
+        if bool(feat.get("fftshifted", True)):
+            freqs = np.fft.fftshift(np.fft.fftfreq(N, d=1.0 / fs))
+        else:
+            freqs = np.fft.fftfreq(N, d=1.0 / fs)
 
-    # Tiny guard in case an old module version was cached
-    if peak_bin >= len(freqs):
-        peak_bin = len(freqs) - 1
-    elif peak_bin < 0:
-        peak_bin = 0
+        # bounds guard
+        if peak_bin >= len(freqs):
+            peak_bin = len(freqs) - 1
+        elif peak_bin < 0:
+            peak_bin = 0
 
-    peak_freq_hz = float(freqs[peak_bin])
+        
+        CENTER_FREQ_HZ = 1_024_000_000.4842604  # from digital metadata: receiver/center_freq
+        abs_rf_hz = CENTER_FREQ_HZ + peak_freq_hz
 
-    row["attribution"] = {
-        "top_features": top_k,
-        "peak_freq_hz": peak_freq_hz,
-    }
+        peak_freq_hz = float(freqs[peak_bin])
+
+        attribution = {
+            "top_features": top_k,
+            "peak_freq_hz": peak_freq_hz,
+            "peak_freq_rf_hz": abs_rf_hz,
+            "entropy": float(feat["entropy"]),
+            "peak_snr_db": float(feat["peak_snr"]),
+        }
+
+        row["attribution"] = attribution
 
     print(json.dumps(row))
     i += 1
