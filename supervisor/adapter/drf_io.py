@@ -1,3 +1,5 @@
+# adapter script
+
 from __future__ import annotations
 from dataclasses import asdict
 from pathlib import Path
@@ -6,8 +8,8 @@ import numpy as np
 
 import digital_rf as drf
 
-from config import DRFConfig, Context
-from windows import window_iter, unit_power
+from supervisor.utils.config import DRFConfig, Context
+from supervisor.utils.windows import window_iter, unit_power
 
 class DigitalRFLoader:
     """

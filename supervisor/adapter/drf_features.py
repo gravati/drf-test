@@ -1,6 +1,21 @@
 from __future__ import annotations
 import numpy as np
 
+
+# DEFINE FEATURES ---
+N_PSD_COMP = 64
+N_BANDS = 6
+
+def get_feature_names(n_psd: int = N_PSD_COMP,
+                      n_bands: int = N_BANDS) -> list[str]:
+    return (
+        [f"psd_comp_{i}" for i in range(n_psd)] +
+        [f"band_{i}" for i in range(n_bands)] +
+        ["entropy", "kurtosis", "peak_snr"]
+    )
+
+FEATURE_NAMES = tuple(get_feature_names())
+
 # PSD CALC ---
 def psd_db(x: np.ndarray, nfft: int | None = None) -> np.ndarray:
     """
