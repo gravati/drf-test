@@ -11,7 +11,7 @@ from supervisor.adapter.drf_io import DigitalRFLoader
 from supervisor.adapter.drf_features import extract_features, stack_for_model, FEATURE_NAMES
 from supervisor.core.supervisor import Supervisor
 
-# --- Build one config object for the entire system ---
+# Build one config object for the entire system ---
 sys_cfg = SystemConfig(
     drf=DRFConfig(
         root=Path(r"C:\Users\hatti\Downloads\netbeans-26-bin\sds-code\sdk\tests\integration\data\captures\drf\westford-vpol"),
@@ -36,7 +36,7 @@ sys_cfg = SystemConfig(
     )
 )
 
-# --- Adapter + Supervisor ---
+# Adapter + Supervisor ---
 ldr = DigitalRFLoader(sys_cfg.drf, sys_cfg.ctx)
 sup = Supervisor.from_system_config(sys_cfg, feature_names=FEATURE_NAMES)
 

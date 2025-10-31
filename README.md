@@ -1,0 +1,1 @@
+TO RUN CLI_TEST: python -m supervisor.cli_test
